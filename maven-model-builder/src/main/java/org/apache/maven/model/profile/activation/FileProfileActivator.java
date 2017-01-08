@@ -20,7 +20,6 @@ package org.apache.maven.model.profile.activation;
  */
 
 import java.io.File;
-
 import org.apache.maven.model.Activation;
 import org.apache.maven.model.ActivationFile;
 import org.apache.maven.model.Profile;
@@ -82,16 +81,38 @@ public class FileProfileActivator
 
         String path;
         boolean missing;
-
+        
         if ( StringUtils.isNotEmpty( file.getExists() ) )
         {
             path = file.getExists();
             missing = false;
+            
+            if ( StringUtils.isNotEmpty( file.getMissing() ) ) 
+            {
+                ModelProblemCollectorRequest request = new ModelProblemCollectorRequest( Severity.WARNING, 
+                                                                                         Version.BASE );
+                request.setMessage( "File activation for profile " + profile.getId() + " : missing " 
+                                                                                         + file.getMissing() 
+                                    + " assertion ignored since exists assertion defined too, you should remove one" );
+                request.setLocation( file.getLocation( "missing" ) );
+                problems.add( request );
+            }
         }
         else if ( StringUtils.isNotEmpty( file.getMissing() ) )
         {
             path = file.getMissing();
             missing = true;
+            
+            if ( StringUtils.isNotEmpty( file.getExists() ) ) 
+            {
+                ModelProblemCollectorRequest request = new ModelProblemCollectorRequest( Severity.WARNING, 
+                                                                                         Version.BASE );
+                request.setMessage( "File activation for profile " + profile.getId() + " : exists "  
+                                                                                         + file.getExists()  
+                                    + " assertion ignored since missing assertion defined too, you should remove one" );
+                request.setLocation( file.getLocation( "exists" ) );
+                problems.add( request );
+            }
         }
         else
         {
@@ -169,7 +190,7 @@ public class FileProfileActivator
 
         return missing ? !fileExists : fileExists;
     }
-
+    
     @Override
     public boolean presentInConfig( Profile profile, ProfileActivationContext context, ModelProblemCollector problems )
     {
