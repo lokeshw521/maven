@@ -22,6 +22,8 @@ package org.apache.maven.model.building;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.composition.DefaultDependencyManagementImporter;
 import org.apache.maven.model.composition.DependencyManagementImporter;
+import org.apache.maven.model.condition.CombinedValueEvaluator;
+import org.apache.maven.model.condition.DefaultCombinedValueEvaluator;
 import org.apache.maven.model.inheritance.DefaultInheritanceAssembler;
 import org.apache.maven.model.inheritance.InheritanceAssembler;
 import org.apache.maven.model.interpolation.ModelInterpolator;
@@ -110,8 +112,13 @@ public class DefaultModelBuilderFactory
 
     protected ProfileActivator[] newProfileActivators()
     {
-        return new ProfileActivator[] { new JdkVersionProfileActivator(), new OperatingSystemProfileActivator(),
-            new PropertyProfileActivator(), new FileProfileActivator().setPathTranslator( newPathTranslator() ) };
+        return new ProfileActivator[]
+        {
+            new JdkVersionProfileActivator(), new OperatingSystemProfileActivator(),
+            new PropertyProfileActivator(),
+            new FileProfileActivator().setPathTranslator( newPathTranslator() )
+                                      .setCombinedValueEvaluator( newCombinedValueEvaluator() )
+        };
     }
 
     protected UrlNormalizer newUrlNormalizer()
@@ -122,6 +129,11 @@ public class DefaultModelBuilderFactory
     protected PathTranslator newPathTranslator()
     {
         return new DefaultPathTranslator();
+    }
+
+    protected CombinedValueEvaluator newCombinedValueEvaluator()
+    {
+        return new DefaultCombinedValueEvaluator();
     }
 
     protected ModelInterpolator newModelInterpolator()
@@ -241,7 +253,9 @@ public class DefaultModelBuilderFactory
     {
 
         @Override
-        public void injectLifecycleBindings( Model model, ModelBuildingRequest request, ModelProblemCollector problems )
+        public void injectLifecycleBindings( Model model,
+                                             ModelBuildingRequest request,
+                                             ModelProblemCollector problems )
         {
         }
 
