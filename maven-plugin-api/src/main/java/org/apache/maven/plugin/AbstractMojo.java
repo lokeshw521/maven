@@ -22,7 +22,8 @@ package org.apache.maven.plugin;
 import java.util.Map;
 
 import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.plugin.logging.SystemStreamLog;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * Abstract class to provide most of the infrastructure required to implement a <code>Mojo</code> except for
@@ -147,53 +148,40 @@ public abstract class AbstractMojo
     private Log log;
 
     /** Plugin container context */
-    private Map pluginContext;
+    private Map<String, Object> pluginContext;
 
-    /**
-     * @deprecated Use SLF4J directly
-     */
-    @Deprecated
     @Override
     public void setLog( Log log )
     {
-        this.log = log;
+        this.log = requireNonNull( log );
     }
 
     /**
      * <p>
-     * Returns the logger that has been injected into this mojo. If no logger has been setup yet, a
-     * <code>SystemStreamLog</code> logger will be created and returned.
+     * Returns the logger that has been injected into this mojo. Injection happens AFTER instance is constructed.
      * </p>
      * <strong>Note:</strong>
-     * The logger returned by this method must not be cached in an instance field during the construction of the mojo.
-     * This would cause the mojo to use a wrongly configured default logger when being run by Maven. The proper logger
-     * gets injected by the Plexus container <em>after</em> the mojo has been constructed. Therefore, simply call this
-     * method directly whenever you need the logger, it is fast enough and needs no caching.
+     * The logger returned by this method must not be cached in an instance field during the construction of the mojo,
+     * as it is not yet injected. The proper logger gets injected by Maven <em>after</em> the mojo has been constructed.
+     * Therefore, simply call this method directly whenever you need the logger, it is fast enough and needs no caching.
      *
      * @see org.apache.maven.plugin.Mojo#getLog()
-     * @deprecated Use SLF4J directly
      */
-    @Deprecated
     @Override
     public Log getLog()
     {
-        if ( log == null )
-        {
-            log = new SystemStreamLog();
-        }
-
         return log;
     }
 
     @Override
-    public Map getPluginContext()
+    public void setPluginContext( Map<String, Object> pluginContext )
     {
-        return pluginContext;
+        this.pluginContext = requireNonNull( pluginContext );
     }
 
     @Override
-    public void setPluginContext( Map pluginContext )
+    public Map<String, Object> getPluginContext()
     {
-        this.pluginContext = pluginContext;
+        return pluginContext;
     }
 }

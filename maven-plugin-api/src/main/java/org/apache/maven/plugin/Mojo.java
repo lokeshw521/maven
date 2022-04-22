@@ -33,7 +33,12 @@ import org.apache.maven.plugin.logging.Log;
  */
 public interface Mojo
 {
-    /** The component <code>role</code> hint for Plexus container */
+    /** The component <code>role</code> hint for Plexus container
+     *
+     * @deprecated do not use legacy Plexus API to look up by string, use JSR330 instead (or if must, use legacy
+     * Plexus lookup by class instead).
+     */
+    @Deprecated
     String ROLE = Mojo.class.getName();
 
     /**
@@ -54,19 +59,14 @@ public interface Mojo
      * and feedback to the user.
      *
      * @param log a new logger
-     *
-     * @deprecated Use SLF4J directly
      */
-    @Deprecated
     void setLog( Log log );
 
     /**
      * Furnish access to the standard Maven logging mechanism which is managed in this base class.
      *
-     * @return a log4j-like logger object which allows plugins to create messages at levels of <code>"debug"</code>,
+     * @return a logger object which allows plugins to create messages at levels of <code>"debug"</code>,
      * <code>"info"</code>, <code>"warn"</code>, and <code>"error"</code>.
-     * @deprecated Use SLF4J directly
      */
-    @Deprecated
     Log getLog();
 }

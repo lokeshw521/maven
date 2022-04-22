@@ -29,9 +29,8 @@ package org.apache.maven.plugin.logging;
  *
  * @author jdcasey
  *
- * @deprecated Use SLF4J directly
+ * TODO: Make this interface more SLF4J Logger-lookalike.
  */
-@Deprecated
 public interface Log
 {
     /**
@@ -45,6 +44,16 @@ public interface Log
      * @param content
      */
     void debug( CharSequence content );
+
+    /**
+     * Send a message to the user in the <b>debug</b> error level using given format and arguments. In format use
+     * {@code {}} as placeholders for objects passed in as arguments. No argument is converted to string is
+     * given level is not enabled.
+     *
+     * @param format
+     * @param arguments
+     */
+    void debug( CharSequence format, Object... arguments );
 
     /**
      * Send a message (and accompanying exception) to the user in the <b>debug</b> error level.<br>

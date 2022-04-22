@@ -143,6 +143,7 @@ public class DefaultMavenPluginManager
     private PluginVersionResolver pluginVersionResolver;
     private PluginArtifactsCache pluginArtifactsCache;
     private MavenPluginValidator pluginValidator;
+    private MojoLogFactory logFactory;
 
     private final ExtensionDescriptorBuilder extensionDescriptorBuilder = new ExtensionDescriptorBuilder();
     private final PluginDescriptorBuilder builder = new PluginDescriptorBuilder();
@@ -158,7 +159,8 @@ public class DefaultMavenPluginManager
             ExtensionRealmCache extensionRealmCache,
             PluginVersionResolver pluginVersionResolver,
             PluginArtifactsCache pluginArtifactsCache,
-            MavenPluginValidator pluginValidator )
+            MavenPluginValidator pluginValidator,
+            MojoLogFactory logFactory )
     {
         this.container = container;
         this.classRealmManager = classRealmManager;
@@ -170,6 +172,7 @@ public class DefaultMavenPluginManager
         this.pluginVersionResolver = pluginVersionResolver;
         this.pluginArtifactsCache = pluginArtifactsCache;
         this.pluginValidator = pluginValidator;
+        this.logFactory = logFactory;
     }
 
     public synchronized PluginDescriptor getPluginDescriptor( Plugin plugin, List<RemoteRepository> repositories,
@@ -584,8 +587,7 @@ public class DefaultMavenPluginManager
 
             if ( mojo instanceof Mojo )
             {
-                Logger mojoLogger = LoggerFactory.getLogger( mojoDescriptor.getImplementation() );
-                ( (Mojo) mojo ).setLog( new MojoLogWrapper( mojoLogger ) );
+                ( ( Mojo ) mojo ).setLog( logFactory.getLog( mojoDescriptor.getImplementation() ) );
             }
 
             Xpp3Dom dom = mojoExecution.getConfiguration();
