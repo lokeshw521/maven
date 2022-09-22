@@ -32,6 +32,10 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.maven.RepositoryUtils;
 import org.apache.maven.artifact.Artifact;
@@ -111,9 +115,10 @@ public class MavenProject
 
     private Set<Artifact> resolvedArtifacts;
 
-    private ArtifactFilter artifactFilter;
+    private final ThreadLocal<ArtifactFilter> artifactFilter
+            = ThreadLocal.withInitial( () -> a -> true );
 
-    private Set<Artifact> artifacts;
+    private final Map<ArtifactFilter, Set<Artifact>> artifacts = new ConcurrentHashMap<>();
 
     private Artifact parentArtifact;
 
@@ -151,8 +156,7 @@ public class MavenProject
 
     private Artifact artifact;
 
-    // calculated.
-    private Map<String, Artifact> artifactMap;
+    private final Map<ArtifactFilter, Map<String, Artifact>> artifactMap = new ConcurrentHashMap<>();
 
     private Model originalModel;
 
@@ -347,84 +351,62 @@ public class MavenProject
         return testCompileSourceRoots;
     }
 
+    @Deprecated
     public List<String> getCompileClasspathElements()
         throws DependencyResolutionRequiredException
     {
-        List<String> list = new ArrayList<>( getArtifacts().size() + 1 );
-
-        String d = getBuild().getOutputDirectory();
-        if ( d != null )
-        {
-            list.add( d );
-        }
-
-        for ( Artifact a : getArtifacts() )
-        {
-            if ( a.getArtifactHandler().isAddedToClasspath() )
-            {
-                // TODO let the scope handler deal with this
-                if ( Artifact.SCOPE_COMPILE.equals( a.getScope() ) || Artifact.SCOPE_PROVIDED.equals( a.getScope() )
-                    || Artifact.SCOPE_SYSTEM.equals( a.getScope() ) )
-                {
-                    addArtifactPath( a, list );
-                }
-            }
-        }
-
-        return list;
+        return getCompileClasspathElements( artifactFilter.get() );
     }
 
-    // TODO this checking for file == null happens because the resolver has been confused about the root
-    // artifact or not. things like the stupid dummy artifact coming from surefire.
+    public List<String> getCompileClasspathElements( ArtifactFilter artifactFilter )
+        throws DependencyResolutionRequiredException
+    {
+        return Stream.concat(
+                    ofNullable( getBuild().getOutputDirectory() ),
+                    getClasspathElements( artifactFilter, MavenProject::compileScope )
+                ).collect( Collectors.toList() );
+    }
+
+    @Deprecated
     public List<String> getTestClasspathElements()
         throws DependencyResolutionRequiredException
     {
-        List<String> list = new ArrayList<>( getArtifacts().size() + 2 );
-
-        String d = getBuild().getTestOutputDirectory();
-        if ( d != null )
-        {
-            list.add( d );
-        }
-
-        d = getBuild().getOutputDirectory();
-        if ( d != null )
-        {
-            list.add( d );
-        }
-
-        for ( Artifact a : getArtifacts() )
-        {
-            if ( a.getArtifactHandler().isAddedToClasspath() )
-            {
-                addArtifactPath( a, list );
-            }
-        }
-
-        return list;
+        return getTestClasspathElements( artifactFilter.get() );
     }
 
+    public List<String> getTestClasspathElements( ArtifactFilter artifactFilter )
+        throws DependencyResolutionRequiredException
+    {
+        return Stream.concat( Stream.concat(
+                ofNullable( getBuild().getTestOutputDirectory() ),
+                ofNullable( getBuild().getOutputDirectory() ) ),
+                getClasspathElements( artifactFilter, a -> true )
+            ).collect( Collectors.toList() );
+    }
+
+    @Deprecated
     public List<String> getRuntimeClasspathElements()
         throws DependencyResolutionRequiredException
     {
-        List<String> list = new ArrayList<>( getArtifacts().size() + 1 );
+        return getRuntimeClasspathElements( artifactFilter.get() );
+    }
 
-        String d = getBuild().getOutputDirectory();
-        if ( d != null )
-        {
-            list.add( d );
-        }
+    public List<String> getRuntimeClasspathElements( ArtifactFilter artifactFilter )
+        throws DependencyResolutionRequiredException
+    {
+        return Stream.concat(
+                    ofNullable( getBuild().getOutputDirectory() ),
+                    getClasspathElements( artifactFilter, MavenProject::runtimeScope )
+                ).collect( Collectors.toList() );
+    }
 
-        for ( Artifact a : getArtifacts() )
-        {
-            if ( a.getArtifactHandler().isAddedToClasspath()
-            // TODO let the scope handler deal with this
-                && ( Artifact.SCOPE_COMPILE.equals( a.getScope() ) || Artifact.SCOPE_RUNTIME.equals( a.getScope() ) ) )
-            {
-                addArtifactPath( a, list );
-            }
-        }
-        return list;
+    private Stream<String> getClasspathElements( ArtifactFilter artifactFilter, Predicate<Artifact> scopes )
+    {
+        return getArtifacts( artifactFilter ).stream()
+                .filter( MavenProject::isAddedToClasspath )
+                .filter( scopes )
+                .filter( a -> a.getFile() != null )
+                .map( a -> a.getFile().getPath() );
     }
 
     // ----------------------------------------------------------------------
@@ -693,14 +675,6 @@ public class MavenProject
         getModel().addLicense( license );
     }
 
-    public void setArtifacts( Set<Artifact> artifacts )
-    {
-        this.artifacts = artifacts;
-
-        // flush the calculated artifactMap
-        artifactMap = null;
-    }
-
     /**
      * All dependencies that this project has, including transitive ones. Contents are lazily populated, so depending on
      * what phases have run dependencies in some scopes won't be included. e.g. if only compile phase has run,
@@ -709,36 +683,46 @@ public class MavenProject
      * @return {@link Set} &lt; {@link Artifact} &gt;
      * @see #getDependencyArtifacts() to get only direct dependencies
      */
+    @Deprecated
     public Set<Artifact> getArtifacts()
     {
-        if ( artifacts == null )
-        {
-            if ( artifactFilter == null || resolvedArtifacts == null )
-            {
-                artifacts = new LinkedHashSet<>();
-            }
-            else
-            {
-                artifacts = new LinkedHashSet<>( resolvedArtifacts.size() * 2 );
-                for ( Artifact artifact : resolvedArtifacts )
-                {
-                    if ( artifactFilter.include( artifact ) )
-                    {
-                        artifacts.add( artifact );
-                    }
-                }
-            }
-        }
-        return artifacts;
+        return getArtifacts( artifactFilter.get() );
     }
 
+    public Set<Artifact> getArtifacts( ArtifactFilter filter )
+    {
+        if ( filter == null || resolvedArtifacts == null )
+        {
+            return Collections.emptySet();
+        }
+        return artifacts.computeIfAbsent( filter, f ->
+        {
+            Set<Artifact> artifacts = new LinkedHashSet<>();
+            for ( Artifact a : resolvedArtifacts )
+            {
+                if ( f.include( a ) )
+                {
+                    artifacts.add( a );
+                }
+            }
+            return artifacts;
+        } );
+    }
+
+    @Deprecated
     public Map<String, Artifact> getArtifactMap()
     {
-        if ( artifactMap == null )
+        return getArtifactMap( artifactFilter.get() );
+    }
+
+    public Map<String, Artifact> getArtifactMap( ArtifactFilter filter )
+    {
+        if ( filter == null || resolvedArtifacts == null )
         {
-            artifactMap = ArtifactUtils.artifactMapByVersionlessId( getArtifacts() );
+            return Collections.emptyMap();
         }
-        return artifactMap;
+        return artifactMap.computeIfAbsent( filter,
+                f -> ArtifactUtils.artifactMapByVersionlessId( getArtifacts( f ) ) );
     }
 
     public void setPluginArtifacts( Set<Artifact> pluginArtifacts )
@@ -1229,11 +1213,6 @@ public class MavenProject
             setDependencyArtifacts( Collections.unmodifiableSet( project.getDependencyArtifacts() ) );
         }
 
-        if ( project.getArtifacts() != null )
-        {
-            setArtifacts( Collections.unmodifiableSet( project.getArtifacts() ) );
-        }
-
         if ( project.getParentFile() != null )
         {
             parentFile = new File( project.getParentFile().getAbsolutePath() );
@@ -1427,9 +1406,9 @@ public class MavenProject
      */
     public void setResolvedArtifacts( Set<Artifact> artifacts )
     {
-        this.resolvedArtifacts = ( artifacts != null ) ? artifacts : Collections.<Artifact>emptySet();
-        this.artifacts = null;
-        this.artifactMap = null;
+        this.resolvedArtifacts = ( artifacts != null ) ? artifacts : Collections.emptySet();
+        this.artifacts.clear();
+        this.artifactMap.clear();
     }
 
     /**
@@ -1440,11 +1419,10 @@ public class MavenProject
      *
      * @param artifactFilter The artifact filter, may be {@code null} to exclude all artifacts.
      */
+    @Deprecated
     public void setArtifactFilter( ArtifactFilter artifactFilter )
     {
-        this.artifactFilter = artifactFilter;
-        this.artifacts = null;
-        this.artifactMap = null;
+        this.artifactFilter.set( artifactFilter );
     }
 
     /**
@@ -1583,227 +1561,81 @@ public class MavenProject
     @Deprecated
     public List<Artifact> getCompileArtifacts()
     {
-        List<Artifact> list = new ArrayList<>( getArtifacts().size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            // TODO classpath check doesn't belong here - that's the other method
-            if ( a.getArtifactHandler().isAddedToClasspath() )
-            {
-                // TODO let the scope handler deal with this
-                if ( Artifact.SCOPE_COMPILE.equals( a.getScope() ) || Artifact.SCOPE_PROVIDED.equals( a.getScope() )
-                    || Artifact.SCOPE_SYSTEM.equals( a.getScope() ) )
-                {
-                    list.add( a );
-                }
-            }
-        }
-        return list;
+        return getArtifacts().stream()
+                .filter( MavenProject::isAddedToClasspath ) // TODO classpath check doesn't belong here - that's the other method
+                .filter( MavenProject::compileScope ) // TODO let the scope handler deal with this
+                .collect( Collectors.toList() );
     }
 
     @Deprecated
     public List<Dependency> getCompileDependencies()
     {
-        Set<Artifact> artifacts = getArtifacts();
-
-        if ( ( artifacts == null ) || artifacts.isEmpty() )
-        {
-            return Collections.emptyList();
-        }
-
-        List<Dependency> list = new ArrayList<>( artifacts.size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            // TODO let the scope handler deal with this
-            if ( Artifact.SCOPE_COMPILE.equals( a.getScope() ) || Artifact.SCOPE_PROVIDED.equals( a.getScope() )
-                     || Artifact.SCOPE_SYSTEM.equals( a.getScope() ) )
-            {
-                Dependency dependency = new Dependency();
-
-                dependency.setArtifactId( a.getArtifactId() );
-                dependency.setGroupId( a.getGroupId() );
-                dependency.setVersion( a.getVersion() );
-                dependency.setScope( a.getScope() );
-                dependency.setType( a.getType() );
-                dependency.setClassifier( a.getClassifier() );
-
-                list.add( dependency );
-            }
-        }
-        return Collections.unmodifiableList( list );
+        return Collections.unmodifiableList( getArtifacts().stream()
+                .filter( MavenProject::compileScope ) // TODO let the scope handler deal with this
+                .map( MavenProject::toDependency )
+                .collect( Collectors.toList() ) );
     }
 
     @Deprecated
     public List<Artifact> getTestArtifacts()
     {
-        List<Artifact> list = new ArrayList<>( getArtifacts().size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            // TODO classpath check doesn't belong here - that's the other method
-            if ( a.getArtifactHandler().isAddedToClasspath() )
-            {
-                list.add( a );
-            }
-        }
-        return list;
+        return Collections.unmodifiableList( getArtifacts().stream()
+                .filter( MavenProject::isAddedToClasspath ) // TODO classpath check doesn't belong here - that's the other method
+                .collect( Collectors.toList() ) );
     }
 
     @Deprecated
     public List<Dependency> getTestDependencies()
     {
-        Set<Artifact> artifacts = getArtifacts();
-
-        if ( ( artifacts == null ) || artifacts.isEmpty() )
-        {
-            return Collections.emptyList();
-        }
-
-        List<Dependency> list = new ArrayList<>( artifacts.size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            Dependency dependency = new Dependency();
-
-            dependency.setArtifactId( a.getArtifactId() );
-            dependency.setGroupId( a.getGroupId() );
-            dependency.setVersion( a.getVersion() );
-            dependency.setScope( a.getScope() );
-            dependency.setType( a.getType() );
-            dependency.setClassifier( a.getClassifier() );
-
-            list.add( dependency );
-        }
-        return Collections.unmodifiableList( list );
+        return Collections.unmodifiableList( getArtifacts().stream()
+                .map( MavenProject::toDependency )
+                .collect( Collectors.toList() ) );
     }
 
     @Deprecated // used by the Maven ITs
     public List<Dependency> getRuntimeDependencies()
     {
-        Set<Artifact> artifacts = getArtifacts();
-
-        if ( ( artifacts == null ) || artifacts.isEmpty() )
-        {
-            return Collections.emptyList();
-        }
-
-        List<Dependency> list = new ArrayList<>( artifacts.size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            // TODO let the scope handler deal with this
-            if ( Artifact.SCOPE_COMPILE.equals( a.getScope() ) || Artifact.SCOPE_RUNTIME.equals( a.getScope() ) )
-            {
-                Dependency dependency = new Dependency();
-
-                dependency.setArtifactId( a.getArtifactId() );
-                dependency.setGroupId( a.getGroupId() );
-                dependency.setVersion( a.getVersion() );
-                dependency.setScope( a.getScope() );
-                dependency.setType( a.getType() );
-                dependency.setClassifier( a.getClassifier() );
-
-                list.add( dependency );
-            }
-        }
-        return Collections.unmodifiableList( list );
+        return Collections.unmodifiableList(  getArtifacts().stream()
+                .filter( MavenProject::runtimeScope ) // TODO let the scope handler deal with this
+                .map( MavenProject::toDependency )
+                .collect( Collectors.toList() ) );
     }
 
     @Deprecated
     public List<Artifact> getRuntimeArtifacts()
     {
-        List<Artifact> list = new ArrayList<>( getArtifacts().size() );
-
-        for ( Artifact a : getArtifacts()  )
-        {
-            // TODO classpath check doesn't belong here - that's the other method
-            if ( a.getArtifactHandler().isAddedToClasspath()
-            // TODO let the scope handler deal with this
-                && ( Artifact.SCOPE_COMPILE.equals( a.getScope() ) || Artifact.SCOPE_RUNTIME.equals( a.getScope() ) ) )
-            {
-                list.add( a );
-            }
-        }
-        return list;
+        return getArtifacts().stream()
+                .filter( MavenProject::isAddedToClasspath ) // TODO classpath check doesn't belong here - that's the other method
+                .filter( MavenProject::runtimeScope ) // TODO let the scope handler deal with this
+                .collect( Collectors.toList() );
     }
 
     @Deprecated
     public List<String> getSystemClasspathElements()
         throws DependencyResolutionRequiredException
     {
-        List<String> list = new ArrayList<>( getArtifacts().size() );
-
-        String d = getBuild().getOutputDirectory();
-        if ( d != null )
-        {
-            list.add( d );
-        }
-
-        for ( Artifact a : getArtifacts() )
-        {
-            if ( a.getArtifactHandler().isAddedToClasspath() )
-            {
-                // TODO let the scope handler deal with this
-                if ( Artifact.SCOPE_SYSTEM.equals( a.getScope() ) )
-                {
-                    addArtifactPath( a, list );
-                }
-            }
-        }
-        return list;
+        return Stream.concat(
+                    ofNullable( getBuild().getOutputDirectory() ),
+                    getClasspathElements( artifactFilter.get(), MavenProject::systemScope )
+                ).collect( Collectors.toList() );
     }
 
     @Deprecated
     public List<Artifact> getSystemArtifacts()
     {
-        List<Artifact> list = new ArrayList<>( getArtifacts().size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            // TODO classpath check doesn't belong here - that's the other method
-            if ( a.getArtifactHandler().isAddedToClasspath() )
-            {
-                // TODO let the scope handler deal with this
-                if ( Artifact.SCOPE_SYSTEM.equals( a.getScope() ) )
-                {
-                    list.add( a );
-                }
-            }
-        }
-        return list;
+        return getArtifacts().stream()
+                .filter( MavenProject::isAddedToClasspath ) // TODO classpath check doesn't belong here - that's the other method
+                .filter( MavenProject::systemScope ) // TODO let the scope handler deal with this
+                .collect( Collectors.toList() );
     }
 
     @Deprecated
     public List<Dependency> getSystemDependencies()
     {
-        Set<Artifact> artifacts = getArtifacts();
-
-        if ( ( artifacts == null ) || artifacts.isEmpty() )
-        {
-            return Collections.emptyList();
-        }
-
-        List<Dependency> list = new ArrayList<>( artifacts.size() );
-
-        for ( Artifact a : getArtifacts() )
-        {
-            // TODO let the scope handler deal with this
-            if ( Artifact.SCOPE_SYSTEM.equals( a.getScope() ) )
-            {
-                Dependency dependency = new Dependency();
-
-                dependency.setArtifactId( a.getArtifactId() );
-                dependency.setGroupId( a.getGroupId() );
-                dependency.setVersion( a.getVersion() );
-                dependency.setScope( a.getScope() );
-                dependency.setType( a.getType() );
-                dependency.setClassifier( a.getClassifier() );
-
-                list.add( dependency );
-            }
-        }
-        return Collections.unmodifiableList( list );
+        return Collections.unmodifiableList( getArtifacts().stream()
+                .filter( MavenProject::systemScope ) // TODO let the scope handler deal with this
+                .map( MavenProject::toDependency )
+                .collect( Collectors.toList() ) );
     }
 
     @Deprecated
@@ -1986,4 +1818,47 @@ public class MavenProject
     {
         this.projectBuilderConfiguration = projectBuildingRequest;
     }
+
+    private static Dependency toDependency( Artifact a )
+    {
+        Dependency dependency = new Dependency();
+
+        dependency.setArtifactId( a.getArtifactId() );
+        dependency.setGroupId( a.getGroupId() );
+        dependency.setVersion( a.getVersion() );
+        dependency.setScope( a.getScope() );
+        dependency.setType( a.getType() );
+        dependency.setClassifier( a.getClassifier() );
+
+        return dependency;
+    }
+
+    private static <T> Stream<T> ofNullable( T t )
+    {
+        return t != null ? Stream.of( t ) : Stream.empty();
+    }
+
+    private static boolean compileScope( Artifact a )
+    {
+        return Artifact.SCOPE_COMPILE.equals( a.getScope() )
+                || Artifact.SCOPE_PROVIDED.equals( a.getScope() )
+                || Artifact.SCOPE_SYSTEM.equals( a.getScope() );
+    }
+
+    private static boolean runtimeScope( Artifact a )
+    {
+        return Artifact.SCOPE_COMPILE.equals( a.getScope() )
+                || Artifact.SCOPE_RUNTIME.equals( a.getScope() );
+    }
+
+    private static boolean systemScope( Artifact a )
+    {
+        return Artifact.SCOPE_SYSTEM.equals( a.getScope() );
+    }
+
+    private static boolean isAddedToClasspath( Artifact a )
+    {
+        return a.getArtifactHandler().isAddedToClasspath();
+    }
+
 }
