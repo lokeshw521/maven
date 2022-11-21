@@ -33,7 +33,6 @@ import org.apache.maven.api.services.ArtifactDeployerException;
 import org.apache.maven.api.services.ArtifactDeployerRequest;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.deployment.DeployRequest;
-import org.eclipse.aether.deployment.DeployResult;
 import org.eclipse.aether.deployment.DeploymentException;
 
 import static org.apache.maven.internal.impl.Utils.cast;
@@ -68,7 +67,7 @@ public class DefaultArtifactDeployer implements ArtifactDeployer
                     .setRepository( session.toRepository( repository ) )
                     .setArtifacts( session.toArtifacts( artifacts ) );
 
-            DeployResult result = repositorySystem.deploy( session.getSession(), deployRequest );
+            repositorySystem.deploy( session.getSession(), deployRequest );
         }
         catch ( DeploymentException e )
         {
