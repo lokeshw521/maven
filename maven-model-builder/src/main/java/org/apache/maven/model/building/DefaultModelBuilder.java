@@ -27,17 +27,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -734,6 +724,27 @@ public class DefaultModelBuilder implements ModelBuilder {
         }
     }
 
+    static class Lineage {
+        final Model model;
+        final List<Lineage> parents;
+
+        Lineage(Model model, List<Lineage> parents) {
+            this.model = model;
+            this.parents = parents;
+        }
+
+        List<Model> getAllModels() {
+            List<Model> models = new ArrayList<>();
+            doGetModels(models);
+            return models;
+        }
+
+        void doGetModels(List<Model> models) {
+            models.add(model);
+            parents.forEach(p -> p.doGetModels(models));
+        }
+    }
+
     @SuppressWarnings("checkstyle:methodlength")
     private Model readEffectiveModel(
             final ModelBuildingRequest request,
@@ -761,76 +772,15 @@ public class DefaultModelBuilder implements ModelBuilder {
             profileActivationContext.setUserProperties(profileProps);
         }
 
-        Collection<String> parentIds = new LinkedHashSet<>();
+        LinkedHashSet<String> parentIds = new LinkedHashSet<>();
+        Lineage lineage =
+                getLineage(request, result, problems, resultData, superData, profileActivationContext, true, parentIds);
 
-        List<Model> lineage = new ArrayList<>();
-
-        for (ModelData currentData = resultData; ; ) {
-            String modelId = currentData.getId();
-            result.addModelId(modelId);
-
-            Model rawModel = currentData.getModel();
-            result.setRawModel(modelId, rawModel);
-
-            profileActivationContext.setProjectProperties(rawModel.getProperties());
-            problems.setSource(rawModel);
-            List<Profile> activePomProfiles =
-                    profileSelector.getActiveProfiles(rawModel.getProfiles(), profileActivationContext, problems);
-            result.setActivePomProfiles(modelId, activePomProfiles);
-
-            Model tmpModel = rawModel.clone();
-
-            problems.setSource(tmpModel);
-
-            // model normalization
-            tmpModel = new Model(modelNormalizer.mergeDuplicates(tmpModel.getDelegate(), request, problems));
-
-            profileActivationContext.setProjectProperties(tmpModel.getProperties());
-
-            Map<String, Activation> interpolatedActivations =
-                    getInterpolatedActivations(rawModel, profileActivationContext, problems);
-            injectProfileActivations(tmpModel, interpolatedActivations);
-
-            // profile injection
-            for (Profile activeProfile : result.getActivePomProfiles(modelId)) {
-                profileInjector.injectProfile(tmpModel, activeProfile, request, problems);
-            }
-
-            if (currentData == resultData) {
-                for (Profile activeProfile : activeExternalProfiles) {
-                    profileInjector.injectProfile(tmpModel, activeProfile, request, problems);
-                }
-                result.setEffectiveModel(tmpModel);
-            }
-
-            lineage.add(tmpModel);
-
-            if (currentData == superData) {
-                break;
-            }
-
-            configureResolver(request.getModelResolver(), tmpModel, problems);
-
-            ModelData parentData =
-                    readParent(currentData.getModel(), currentData.getSource(), request, result, problems);
-
-            if (parentData == null) {
-                currentData = superData;
-            } else if (!parentIds.add(parentData.getId())) {
-                StringBuilder message = new StringBuilder("The parents form a cycle: ");
-                for (String parentId : parentIds) {
-                    message.append(parentId).append(" -> ");
-                }
-                message.append(parentData.getId());
-
-                problems.add(new ModelProblemCollectorRequest(ModelProblem.Severity.FATAL, ModelProblem.Version.BASE)
-                        .setMessage(message.toString()));
-
-                throw problems.newModelBuildingException();
-            } else {
-                currentData = parentData;
-            }
+        Model tmpModel = lineage.model;
+        for (Profile activeProfile : activeExternalProfiles) {
+            profileInjector.injectProfile(tmpModel, activeProfile, request, problems);
         }
+        result.setEffectiveModel(tmpModel);
 
         problems.setSource(result.getRawModel());
         checkPluginVersions(lineage, request, problems);
@@ -855,6 +805,94 @@ public class DefaultModelBuilder implements ModelBuilder {
         configureResolver(request.getModelResolver(), resultModel, problems, true);
 
         return resultModel;
+    }
+
+    private Lineage getLineage(
+            ModelBuildingRequest request,
+            DefaultModelBuildingResult result,
+            DefaultModelProblemCollector problems,
+            ModelData resultData,
+            ModelData superData,
+            DefaultProfileActivationContext profileActivationContext,
+            boolean firstLevel,
+            LinkedHashSet<String> parentIds)
+            throws ModelBuildingException {
+
+        ModelData currentData = resultData;
+
+        String modelId = currentData.getId();
+        result.addModelId(modelId);
+
+        Model rawModel = currentData.getModel();
+        result.setRawModel(modelId, rawModel);
+
+        profileActivationContext.setProjectProperties(rawModel.getProperties());
+        problems.setSource(rawModel);
+        List<Profile> activePomProfiles =
+                profileSelector.getActiveProfiles(rawModel.getProfiles(), profileActivationContext, problems);
+        result.setActivePomProfiles(modelId, activePomProfiles);
+
+        Model tmpModel = rawModel.clone();
+
+        problems.setSource(tmpModel);
+
+        // model normalization
+        tmpModel = new Model(modelNormalizer.mergeDuplicates(tmpModel.getDelegate(), request, problems));
+
+        profileActivationContext.setProjectProperties(tmpModel.getProperties());
+
+        Map<String, Activation> interpolatedActivations =
+                getInterpolatedActivations(rawModel, profileActivationContext, problems);
+        injectProfileActivations(tmpModel, interpolatedActivations);
+
+        // profile injection
+        for (Profile activeProfile : result.getActivePomProfiles(modelId)) {
+            profileInjector.injectProfile(tmpModel, activeProfile, request, problems);
+        }
+        if (firstLevel) {
+            for (Profile activeProfile : result.getActiveExternalProfiles()) {
+                profileInjector.injectProfile(tmpModel, activeProfile, request, problems);
+            }
+            result.setEffectiveModel(tmpModel);
+        }
+
+        if (currentData == superData) {
+            return new Lineage(tmpModel, Collections.emptyList());
+        }
+
+        configureResolver(request.getModelResolver(), tmpModel, problems, false);
+
+        List<Lineage> parents = new ArrayList<>();
+
+        List<Parent> list = new ArrayList<>();
+        if (currentData.getModel().getParent() != null) {
+            list.add(currentData.getModel().getParent());
+        } else {
+            parents.add(getLineage(
+                    request, result, problems, superData, superData, profileActivationContext, false, parentIds));
+        }
+        list.addAll(currentData.getModel().getMixins());
+        for (Parent parent : list) {
+            ModelData parentData =
+                    readParent(currentData.getModel(), parent, currentData.getSource(), request, result, problems);
+            LinkedHashSet<String> newParentIds = new LinkedHashSet<>(parentIds.size() + 1);
+            newParentIds.addAll(parentIds);
+            if (!newParentIds.add(parentData.getId())) {
+                StringBuilder message = new StringBuilder("The parents form a cycle: ");
+                for (String parentId : newParentIds) {
+                    message.append(parentId).append(" -> ");
+                }
+                message.append(parentData.getId());
+                problems.add(
+                        new ModelProblemCollectorRequest(Severity.FATAL, Version.BASE).setMessage(message.toString()));
+
+                throw problems.newModelBuildingException();
+            }
+            parents.add(getLineage(
+                    request, result, problems, parentData, superData, profileActivationContext, false, newParentIds));
+        }
+
+        return new Lineage(tmpModel, parents);
     }
 
     private Map<String, Activation> getInterpolatedActivations(
@@ -1200,10 +1238,6 @@ public class DefaultModelBuilder implements ModelBuilder {
         return context;
     }
 
-    private void configureResolver(ModelResolver modelResolver, Model model, DefaultModelProblemCollector problems) {
-        configureResolver(modelResolver, model, problems, false);
-    }
-
     private void configureResolver(
             ModelResolver modelResolver,
             Model model,
@@ -1229,8 +1263,7 @@ public class DefaultModelBuilder implements ModelBuilder {
         }
     }
 
-    private void checkPluginVersions(
-            List<Model> lineage, ModelBuildingRequest request, ModelProblemCollector problems) {
+    private void checkPluginVersions(Lineage lineage, ModelBuildingRequest request, ModelProblemCollector problems) {
         if (request.getValidationLevel() < ModelBuildingRequest.VALIDATION_LEVEL_MAVEN_2_0) {
             return;
         }
@@ -1239,8 +1272,9 @@ public class DefaultModelBuilder implements ModelBuilder {
         Map<String, String> versions = new HashMap<>();
         Map<String, String> managedVersions = new HashMap<>();
 
-        for (int i = lineage.size() - 1; i >= 0; i--) {
-            Model model = lineage.get(i);
+        List<Model> models = lineage.getAllModels();
+        Collections.reverse(models);
+        for (Model model : models) {
             Build build = model.getBuild();
             if (build != null) {
                 for (Plugin plugin : build.getPlugins()) {
@@ -1270,12 +1304,11 @@ public class DefaultModelBuilder implements ModelBuilder {
         }
     }
 
-    private Model assembleInheritance(
-            List<Model> lineage, ModelBuildingRequest request, ModelProblemCollector problems) {
-        org.apache.maven.api.model.Model parent =
-                lineage.get(lineage.size() - 1).getDelegate();
-        for (int i = lineage.size() - 2; i >= 0; i--) {
-            Model child = lineage.get(i);
+    private Model assembleInheritance(Lineage lineage, ModelBuildingRequest request, ModelProblemCollector problems) {
+        List<Model> models = lineage.getAllModels();
+        org.apache.maven.api.model.Model parent = models.get(models.size() - 1).getDelegate();
+        for (int i = models.size() - 2; i >= 0; i--) {
+            Model child = models.get(i);
             parent = inheritanceAssembler.assembleModelInheritance(child.getDelegate(), parent, request, problems);
         }
         return new Model(parent);
@@ -1350,6 +1383,7 @@ public class DefaultModelBuilder implements ModelBuilder {
 
     private ModelData readParent(
             Model childModel,
+            Parent parent,
             Source childSource,
             ModelBuildingRequest request,
             ModelBuildingResult result,
@@ -1357,11 +1391,10 @@ public class DefaultModelBuilder implements ModelBuilder {
             throws ModelBuildingException {
         ModelData parentData = null;
 
-        Parent parent = childModel.getParent();
         if (parent != null) {
-            parentData = readParentLocally(childModel, childSource, request, result, problems);
+            parentData = readParentLocally(childModel, parent, childSource, request, result, problems);
             if (parentData == null) {
-                parentData = readParentExternally(childModel, request, result, problems);
+                parentData = readParentExternally(childModel, parent, request, result, problems);
             }
 
             Model parentModel = parentData.getModel();
@@ -1378,17 +1411,17 @@ public class DefaultModelBuilder implements ModelBuilder {
 
     private ModelData readParentLocally(
             Model childModel,
+            Parent parent,
             Source childSource,
             ModelBuildingRequest request,
             ModelBuildingResult result,
             DefaultModelProblemCollector problems)
             throws ModelBuildingException {
-        final Parent parent = childModel.getParent();
-        final ModelSource2 candidateSource;
+        final ModelSource candidateSource;
         final Model candidateModel;
         final WorkspaceModelResolver resolver = request.getWorkspaceModelResolver();
         if (resolver == null) {
-            candidateSource = getParentPomFile(childModel, childSource);
+            candidateSource = getParentPomFile(parent, childSource);
 
             if (candidateSource == null) {
                 return null;
@@ -1425,9 +1458,9 @@ public class DefaultModelBuilder implements ModelBuilder {
         String artifactId = candidateModel.getArtifactId();
 
         if (groupId == null
-                || !groupId.equals(parent.getGroupId())
+                || (parent.getGroupId() != null && !groupId.equals(parent.getGroupId()))
                 || artifactId == null
-                || !artifactId.equals(parent.getArtifactId())) {
+                || (parent.getArtifactId() != null && !artifactId.equals(parent.getArtifactId()))) {
             StringBuilder buffer = new StringBuilder(256);
             buffer.append("'parent.relativePath'");
             if (childModel != problems.getRootModel()) {
@@ -1501,33 +1534,29 @@ public class DefaultModelBuilder implements ModelBuilder {
                 || rawChildModelVersion.equals("${project.parent.version}");
     }
 
-    private ModelSource2 getParentPomFile(Model childModel, Source source) {
-        if (!(source instanceof ModelSource2)) {
-            return null;
-        }
-
-        String parentPath = childModel.getParent().getRelativePath();
-
+    private ModelSource getParentPomFile(Parent parent, Source source) {
+        String parentPath = parent.getRelativePath();
         if (parentPath == null || parentPath.length() <= 0) {
             return null;
         }
 
         if (source instanceof ModelSource3) {
             return ((ModelSource3) source).getRelatedSource(modelProcessor, parentPath);
-        } else {
+        } else if (source instanceof ModelSource2) {
             return ((ModelSource2) source).getRelatedSource(parentPath);
+        } else {
+            return null;
         }
     }
 
     private ModelData readParentExternally(
             Model childModel,
+            Parent parent,
             ModelBuildingRequest request,
             ModelBuildingResult result,
             DefaultModelProblemCollector problems)
             throws ModelBuildingException {
         problems.setSource(childModel);
-
-        Parent parent = childModel.getParent();
 
         String groupId = parent.getGroupId();
         String artifactId = parent.getArtifactId();

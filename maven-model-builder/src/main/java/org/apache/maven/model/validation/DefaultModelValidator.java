@@ -126,6 +126,10 @@ public class DefaultModelValidator implements ModelValidator {
             }
         }
 
+        for (Parent mixin : m.getMixins()) {
+            // TODO: validate mixin
+        }
+
         if (request.getValidationLevel() >= ModelBuildingRequest.VALIDATION_LEVEL_MAVEN_2_0) {
             Set<String> modules = new HashSet<>();
             for (int i = 0, n = m.getModules().size(); i < n; i++) {

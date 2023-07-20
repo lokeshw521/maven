@@ -114,6 +114,20 @@
         </field>
 
         <!-- ====================================================================== -->
+        <!-- Mixins                                                                 -->
+        <!-- ====================================================================== -->
+
+        <field xdoc.separator="blank">
+          <name>mixins</name>
+          <version>4.1.0+</version>
+          <description>Mixins...</description>
+          <association>
+            <type>Parent</type>
+            <multiplicity>*</multiplicity>
+          </association>
+        </field>
+
+        <!-- ====================================================================== -->
         <!-- groupId/artifactId/Version/Packaging                                   -->
         <!-- ====================================================================== -->
 
