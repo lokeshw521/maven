@@ -1096,6 +1096,7 @@ public class DefaultModelBuilder implements ModelBuilder {
             options.put(ModelProcessor.IS_STRICT, strict);
             options.put(ModelProcessor.SOURCE, modelSource);
             options.put(ModelReader.ROOT_DIRECTORY, request.getRootDirectory());
+            options.put(ModelReader.XINCLUDE, Features.xinclude(request.getUserProperties()));
 
             InputSource source;
             if (request.isLocationTracking()) {
@@ -1106,9 +1107,15 @@ public class DefaultModelBuilder implements ModelBuilder {
             }
 
             try {
-                model = modelProcessor
-                        .read(modelSource.getInputStream(), options)
-                        .getDelegate();
+                if (modelSource instanceof FileModelSource) {
+                    model = modelProcessor
+                            .read(((FileModelSource) modelSource).getFile(), options)
+                            .getDelegate();
+                } else {
+                    model = modelProcessor
+                            .read(modelSource.getInputStream(), options)
+                            .getDelegate();
+                }
             } catch (ModelParseException e) {
                 if (!strict) {
                     throw e;
@@ -1117,9 +1124,15 @@ public class DefaultModelBuilder implements ModelBuilder {
                 options.put(ModelProcessor.IS_STRICT, Boolean.FALSE);
 
                 try {
-                    model = modelProcessor
-                            .read(modelSource.getInputStream(), options)
-                            .getDelegate();
+                    if (modelSource instanceof FileModelSource) {
+                        model = modelProcessor
+                                .read(((FileModelSource) modelSource).getFile(), options)
+                                .getDelegate();
+                    } else {
+                        model = modelProcessor
+                                .read(modelSource.getInputStream(), options)
+                                .getDelegate();
+                    }
                 } catch (ModelParseException ne) {
                     // still unreadable even in non-strict mode, rethrow original error
                     throw e;

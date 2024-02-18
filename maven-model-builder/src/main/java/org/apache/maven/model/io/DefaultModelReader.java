@@ -25,12 +25,13 @@ import javax.xml.stream.Location;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.Source;
+import javax.xml.transform.stream.StreamSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
@@ -39,6 +40,8 @@ import org.apache.maven.model.InputSource;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.building.ModelSourceTransformer;
 import org.apache.maven.model.v4.MavenStaxReader;
+import org.apache.maven.stax.xinclude.XInclude;
+import org.codehaus.stax2.io.Stax2FileSource;
 
 /**
  * Handles deserialization of a model from some kind of textual format like XML.
@@ -58,13 +61,11 @@ public class DefaultModelReader implements ModelReader {
     public Model read(File input, Map<String, ?> options) throws IOException {
         Objects.requireNonNull(input, "input cannot be null");
 
-        try (InputStream in = Files.newInputStream(input.toPath())) {
-            Model model = read(in, input.toPath(), options);
+        Model model = read(null, input, options);
 
-            model.setPomFile(input);
+        model.setPomFile(input);
 
-            return model;
-        }
+        return model;
     }
 
     @Override
@@ -100,14 +101,35 @@ public class DefaultModelReader implements ModelReader {
         return (Path) value;
     }
 
-    private Model read(InputStream input, Path pomFile, Map<String, ?> options) throws IOException {
-        try {
-            XMLInputFactory factory = new com.ctc.wstx.stax.WstxInputFactory();
-            factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
-            XMLStreamReader parser = factory.createXMLStreamReader(input);
+    private boolean getXInclude(Map<String, ?> options) {
+        Object value = (options != null) ? options.get(XINCLUDE) : null;
+        return value instanceof Boolean && (Boolean) value;
+    }
 
+    private Model read(InputStream input, File pomFile, Map<String, ?> options) throws IOException {
+        try {
             InputSource source = getSource(options);
             boolean strict = isStrict(options);
+            Path rootDirectory = getRootDirectory(options);
+
+            Source xmlSource;
+            if (pomFile != null) {
+                xmlSource = new Stax2FileSource(pomFile);
+            } else {
+                xmlSource = new StreamSource(input);
+            }
+
+            XMLStreamReader parser;
+            // We only support general external entities and XInclude when reading a file in strict mode
+            if (pomFile != null && strict && getXInclude(options)) {
+                parser = XInclude.xinclude(xmlSource, new LocalXmlResolver(rootDirectory));
+            } else {
+                XMLInputFactory factory = new com.ctc.wstx.stax.WstxInputFactory();
+                factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
+                factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+                parser = factory.createXMLStreamReader(xmlSource);
+            }
+
             MavenStaxReader mr = new MavenStaxReader();
             mr.setAddLocationInformation(source != null);
             Model model = new Model(mr.read(parser, strict, source != null ? source.toApiSource() : null));
@@ -127,7 +149,6 @@ public class DefaultModelReader implements ModelReader {
     private Model read(Reader reader, Path pomFile, Map<String, ?> options) throws IOException {
         try {
             XMLInputFactory factory = new com.ctc.wstx.stax.WstxInputFactory();
-            factory.setProperty(XMLInputFactory.IS_REPLACING_ENTITY_REFERENCES, false);
             XMLStreamReader parser = factory.createXMLStreamReader(reader);
 
             InputSource source = getSource(options);
