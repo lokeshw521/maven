@@ -40,7 +40,7 @@ class MavenPropertiesLoaderTest {
         Path mavenConf = mavenHome.resolve("conf");
         Files.createDirectories(mavenConf);
         Path mavenUserProps = mavenConf.resolve("maven.properties");
-        Files.writeString(mavenUserProps, "${includes} = \"/user/ma ven.properties\",  ?/foo/bar\n");
+        Files.writeString(mavenUserProps, "${includes} = ?\"/user/ma ven.properties\",  ?/foo/bar\n");
         Path userDirectory = fs.getPath("/user");
         Files.createDirectories(userDirectory);
         Path propsPath = userDirectory.resolve("ma ven.properties");

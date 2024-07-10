@@ -99,7 +99,7 @@ public class MavenPropertiesLoader {
             throws Exception {
         String includes = configProps.get(propertyName);
         if (includes != null) {
-            StringTokenizer st = new StringTokenizer(includes, "\",", true);
+            StringTokenizer st = new StringTokenizer(includes, "?\",", true);
             if (st.countTokens() > 0) {
                 String location;
                 do {
@@ -125,10 +125,11 @@ public class MavenPropertiesLoader {
     }
 
     private static String nextLocation(StringTokenizer st) {
+        boolean optional = false;
         String retVal = null;
 
         if (st.countTokens() > 0) {
-            String tokenList = "\",";
+            String tokenList = "?\",";
             StringBuilder tokBuf = new StringBuilder(10);
             String tok;
             boolean inQuote = false;
@@ -153,6 +154,9 @@ public class MavenPropertiesLoader {
                             exit = true;
                         }
                         break;
+                    case "?":
+                        optional = true;
+                        break;
                     default:
                         tokStarted = true;
                         tokBuf.append(tok.trim());
@@ -167,6 +171,6 @@ public class MavenPropertiesLoader {
             }
         }
 
-        return retVal;
+        return optional ? "?" + retVal : retVal;
     }
 }
