@@ -160,10 +160,10 @@ public final class Constants {
      * then it behaves as "ordinary relocation": the coordinate is preserved from relocated artifact.
      * Finally, if right hand <code>GAV</code> is absent (line looks like <code>GAV&gt;</code>), the left hand matching
      * <code>GAV</code> is banned fully (from resolving).
-     * <p>
+     * <br/>
      * Note: the <code>&gt;</code> means project level, while <code>&gt;&gt;</code> means global (whole session level,
      * so even plugins will get relocated artifacts) relocation.
-     * <p>
+     * <br/>
      * For example,
      * <pre>maven.relocations.entries = org.foo:*:*>, \\<br/>    org.here:*:*>org.there:*:*, \\<br/>    javax.inject:javax.inject:1>>jakarta.inject:jakarta.inject:1.0.5</pre>
      * means: 3 entries, ban <code>org.foo group</code> (exactly, so <code>org.foo.bar</code> is allowed),
@@ -178,7 +178,7 @@ public final class Constants {
     /**
      * User property for version filters expression, a semicolon separated list of filters to apply. By default, no version
      * filter is applied (like in Maven 3).
-     * <p>
+     * <br/>
      * Supported filters:
      * <ul>
      *     <li>"h" or "h(num)" - highest version or top list of highest ones filter</li>
@@ -221,7 +221,7 @@ public final class Constants {
      * management entries in their POMs. Maven 3 targeted full backward compatibility with Maven2, hence it ignored
      * dependency management entries in transitive dependency POMs. Maven 4 enables "transitivity" by default, hence
      * unlike Maven2, obeys dependency management entries deep in dependency graph as well.
-     * <p>
+     * <br/>
      * Default: <code>"true"</code>.
      *
      * @since 4.0.0
