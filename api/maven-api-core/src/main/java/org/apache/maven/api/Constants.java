@@ -163,14 +163,12 @@ public final class Constants {
      * <p>
      * Note: the <code>&gt;</code> means project level, while <code>&gt;&gt;</code> means global (whole session level,
      * so even plugins will get relocated artifacts) relocation.
-     * </p>
      * <p>
      * For example,
      * <pre>maven.relocations.entries = org.foo:*:*>, \\<br/>    org.here:*:*>org.there:*:*, \\<br/>    javax.inject:javax.inject:1>>jakarta.inject:jakarta.inject:1.0.5</pre>
      * means: 3 entries, ban <code>org.foo group</code> (exactly, so <code>org.foo.bar</code> is allowed),
      * relocate <code>org.here</code> to <code>org.there</code> and finally globally relocate (see <code>&gt;&gt;</code> above)
      * <code>javax.inject:javax.inject:1</code> to <code>jakarta.inject:jakarta.inject:1.0.5</code>.
-     * </p>
      *
      * @since 4.0.0
      */
@@ -191,7 +189,6 @@ public final class Constants {
      * Example filter expression: <code>"h(5);s;e(org.foo:bar:1)</code> will cause: ranges are filtered for "top 5" (instead
      * full range), snapshots are banned if root project is not a snapshot, and if range for <code>org.foo:bar</code> is
      * being processed, version 1 is omitted.
-     * </p>
      *
      * @since 4.0.0
      */
@@ -226,7 +223,6 @@ public final class Constants {
      * unlike Maven2, obeys dependency management entries deep in dependency graph as well.
      * <p>
      * Default: <code>"true"</code>.
-     * </p>
      *
      * @since 4.0.0
      */
