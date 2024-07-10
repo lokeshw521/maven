@@ -96,8 +96,7 @@ public class InterpolationHelper {
      *         property placeholder syntax or a recursive variable reference.
      **/
     public static String substVars(
-            String val, String currentKey, Map<String, String> cycleMap, Map<String, String> configProps)
-            throws IllegalArgumentException {
+            String val, String currentKey, Map<String, String> cycleMap, Map<String, String> configProps) {
         return substVars(val, currentKey, cycleMap, configProps, (Function<String, String>) null);
     }
 
@@ -129,8 +128,7 @@ public class InterpolationHelper {
             String currentKey,
             Map<String, String> cycleMap,
             Map<String, String> configProps,
-            Function<String, String> callback)
-            throws IllegalArgumentException {
+            Function<String, String> callback) {
         return substVars(val, currentKey, cycleMap, configProps, callback, true, true, false);
     }
 
@@ -188,8 +186,7 @@ public class InterpolationHelper {
             Function<String, String> callback,
             boolean substituteFromConfig,
             boolean substituteFromSystemProperties,
-            boolean defaultsToEmptyString)
-            throws IllegalArgumentException {
+            boolean defaultsToEmptyString) {
         if (cycleMap == null) {
             cycleMap = new HashMap<>();
         }
