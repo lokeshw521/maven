@@ -70,20 +70,26 @@ class MavenPropertiesLoaderTest {
         Path mavenConf = mavenHome.resolve("conf");
         Files.createDirectories(mavenConf);
         Path mavenUserProps = mavenConf.resolve("maven.properties");
-        Files.writeString(mavenUserProps, "${includes} = default.properties,?env-${env.envName}.properties\n");
-        Path propsPath = mavenConf.resolve("default.properties");
-        Files.writeString(propsPath, "foo=bar");
-        Path envPath = mavenConf.resolve("env-ci.properties");
+        Files.writeString(mavenUserProps, "${includes} = ?\"${user.home}/maven.properties\"\n");
+        Path userDirectory = fs.getPath("/user");
+        Files.createDirectories(userDirectory);
+        Path propsPath = userDirectory.resolve("maven.properties");
+        Files.writeString(propsPath, "${includes} = default.properties,?env-${env.envName}.properties\n");
+        Path defPath = userDirectory.resolve("default.properties");
+        Files.writeString(defPath, "foo=bar");
+        Path envPath = userDirectory.resolve("env-ci.properties");
         Files.writeString(envPath, "foo=bar-env\nfoo-env=bar\n");
 
         Properties p = new Properties();
-        MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false);
+        p.put("user.home", userDirectory.toString());
+        MavenPropertiesLoader.loadProperties(p, mavenUserProps, p::getProperty, false);
         assertEquals("bar", p.getProperty("foo"));
         assertNull(p.getProperty("foo-env"));
 
         p = new Properties();
+        p.put("user.home", userDirectory.toString());
         p.put("env.envName", "ci");
-        MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false);
+        MavenPropertiesLoader.loadProperties(p, mavenUserProps, p::getProperty, false);
         assertEquals("bar-env", p.getProperty("foo"));
         assertEquals("bar", p.getProperty("foo-env"));
     }
