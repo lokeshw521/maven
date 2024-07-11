@@ -58,14 +58,8 @@ public class InterpolationHelper {
         for (String name : properties.keySet()) {
             properties.compute(
                     name,
-                    (k, value) -> substVars(
-                            value,
-                            name,
-                            null,
-                            org,
-                            callback,
-                            substituteFromConfig,
-                            defaultsToEmptyString));
+                    (k, value) ->
+                            substVars(value, name, null, org, callback, substituteFromConfig, defaultsToEmptyString));
         }
     }
 
@@ -162,13 +156,7 @@ public class InterpolationHelper {
             boolean substituteFromConfig,
             boolean defaultsToEmptyString) {
         return unescape(doSubstVars(
-                val,
-                currentKey,
-                cycleMap,
-                configProps,
-                callback,
-                substituteFromConfig,
-                defaultsToEmptyString));
+                val, currentKey, cycleMap, configProps, callback, substituteFromConfig, defaultsToEmptyString));
     }
 
     private static String doSubstVars(
@@ -294,13 +282,7 @@ public class InterpolationHelper {
         // Now perform substitution again, since there could still
         // be substitutions to make.
         val = doSubstVars(
-                val,
-                currentKey,
-                cycleMap,
-                configProps,
-                callback,
-                substituteFromConfig,
-                defaultsToEmptyString);
+                val, currentKey, cycleMap, configProps, callback, substituteFromConfig, defaultsToEmptyString);
 
         cycleMap.remove(currentKey);
 
@@ -324,5 +306,4 @@ public class InterpolationHelper {
         }
         return val;
     }
-
 }

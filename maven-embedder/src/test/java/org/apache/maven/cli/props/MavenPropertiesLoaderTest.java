@@ -29,7 +29,6 @@ import com.google.common.jimfs.Jimfs;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -52,8 +51,8 @@ class MavenPropertiesLoaderTest {
 
         Properties p = new Properties();
         p.put("java.version", "11");
-        assertThrows(NoSuchFileException.class, () ->
-            MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false));
+        assertThrows(
+                NoSuchFileException.class, () -> MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false));
 
         Path another = propsPath.resolveSibling("another.properties");
         Files.writeString(another, "bar = chti${java.version}\n");

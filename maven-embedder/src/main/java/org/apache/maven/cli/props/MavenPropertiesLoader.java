@@ -67,7 +67,8 @@ public class MavenPropertiesLoader {
         props.keySet().removeIf(k -> k.startsWith(OVERRIDE_PREFIX));
     }
 
-    private static MavenProperties loadPropertiesFile(Path path, boolean failIfNotFound, Function<String, String> callback) throws Exception {
+    private static MavenProperties loadPropertiesFile(
+            Path path, boolean failIfNotFound, Function<String, String> callback) throws Exception {
         MavenProperties configProps = new MavenProperties(null, false);
         if (Files.exists(path) || failIfNotFound) {
             configProps.load(path);
@@ -77,7 +78,8 @@ public class MavenPropertiesLoader {
         return configProps;
     }
 
-    private static void loadIncludes(String propertyName, Path configProp, MavenProperties configProps, Function<String, String> callback)
+    private static void loadIncludes(
+            String propertyName, Path configProp, MavenProperties configProps, Function<String, String> callback)
             throws Exception {
         String includes = configProps.get(propertyName);
         if (includes != null) {

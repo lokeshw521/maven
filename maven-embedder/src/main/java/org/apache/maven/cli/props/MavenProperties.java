@@ -274,7 +274,6 @@ public class MavenProperties extends AbstractMap<String, String> {
         valueLines = new ArrayList<>(valueLines);
         String escapedKey = escapeKey(key);
         StringBuilder sb = new StringBuilder();
-        int lastLine = valueLines.size() - 1;
         if (valueLines.isEmpty()) {
             valueLines.add(escapedKey + "=");
             sb.append(escapedKey).append("=");
