@@ -16,19 +16,30 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.maven.api.services;
+package org.apache.maven.lifecycle.internal.concurrent;
 
-import java.util.List;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
-import org.apache.maven.api.Lifecycle;
+import org.junit.jupiter.api.Test;
 
-public interface LifecycleRegistry extends ExtensibleEnumRegistry<Lifecycle>, Iterable<Lifecycle> {
+public class PhasingExecutorTest {
 
-    default Stream<Lifecycle> stream() {
-        return StreamSupport.stream(spliterator(), false);
+    @Test
+    void testPhaser() {
+        PhasingExecutor p = new PhasingExecutor(Executors.newFixedThreadPool(4));
+        p.execute(() -> waitSomeTime(p, 2));
+        p.await();
     }
 
-    List<String> computePhases(Lifecycle lifecycle);
+    private void waitSomeTime(Executor executor, int nb) {
+        try {
+            Thread.sleep(10);
+            if (nb > 0) {
+                executor.execute(() -> waitSomeTime(executor, nb - 1));
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
