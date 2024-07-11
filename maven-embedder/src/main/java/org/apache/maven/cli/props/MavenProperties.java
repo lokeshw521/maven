@@ -302,7 +302,7 @@ public class MavenProperties extends AbstractMap<String, String> {
     }
 
     public String put(String key, List<String> commentLines, String value) {
-        commentLines = new ArrayList<String>(commentLines);
+        commentLines = new ArrayList<>(commentLines);
         this.layout.put(key, new Layout(commentLines, null));
         return storage.put(key, value);
     }
