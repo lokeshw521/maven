@@ -73,8 +73,8 @@ public class MavenProperties extends AbstractMap<String, String> {
     /** Constant for the length of a unicode literal.*/
     private static final int UNICODE_LEN = 4;
 
-    private final Map<String, String> storage = new LinkedHashMap<String, String>();
-    private final Map<String, Layout> layout = new LinkedHashMap<String, Layout>();
+    private final Map<String, String> storage = new LinkedHashMap<>();
+    private final Map<String, Layout> layout = new LinkedHashMap<>();
     private List<String> header;
     private List<String> footer;
     private Path location;
@@ -270,8 +270,8 @@ public class MavenProperties extends AbstractMap<String, String> {
     }
 
     public String put(String key, List<String> commentLines, List<String> valueLines) {
-        commentLines = new ArrayList<String>(commentLines);
-        valueLines = new ArrayList<String>(valueLines);
+        commentLines = new ArrayList<>(commentLines);
+        valueLines = new ArrayList<>(valueLines);
         String escapedKey = escapeKey(key);
         StringBuilder sb = new StringBuilder();
         int lastLine = valueLines.size() - 1;
@@ -444,12 +444,12 @@ public class MavenProperties extends AbstractMap<String, String> {
                     reader.getPropertyName(),
                     new Layout(
                             idx < reader.getCommentLines().size()
-                                    ? new ArrayList<String>(reader.getCommentLines()
+                                    ? new ArrayList<>(reader.getCommentLines()
                                             .subList(
                                                     idx,
                                                     reader.getCommentLines().size()))
                                     : null,
-                            new ArrayList<String>(reader.getValueLines())));
+                            new ArrayList<>(reader.getValueLines())));
         }
         typed = maybeTyped && reader.typed != null && reader.typed;
         if (!typed) {
@@ -472,9 +472,6 @@ public class MavenProperties extends AbstractMap<String, String> {
     }
 
     public void substitute(Function<String, String> callback) {
-        if (callback == null) {
-            callback = new InterpolationHelper.DefaultSubstitutionCallback();
-        }
         InterpolationHelper.performSubstitution(storage, callback);
     }
 
@@ -827,8 +824,8 @@ public class MavenProperties extends AbstractMap<String, String> {
          */
         public PropertiesReader(Reader reader, boolean maybeTyped) {
             super(reader);
-            commentLines = new ArrayList<String>();
-            valueLines = new ArrayList<String>();
+            commentLines = new ArrayList<>();
+            valueLines = new ArrayList<>();
             this.maybeTyped = maybeTyped;
         }
 

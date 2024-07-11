@@ -1637,7 +1637,7 @@ public class MavenCli {
         // Load config files
         // ----------------------------------------------------------------------
         Function<String, String> callback =
-                or(paths::getProperty, prefix("cli:", commandLine::getOptionValue), systemProperties::getProperty);
+                or(paths::getProperty, prefix("cli.", commandLine::getOptionValue), systemProperties::getProperty);
 
         Path mavenConf;
         if (systemProperties.getProperty(MAVEN_INSTALLATION_CONF) != null) {

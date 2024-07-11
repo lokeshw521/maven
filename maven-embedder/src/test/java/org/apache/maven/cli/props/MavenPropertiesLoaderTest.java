@@ -20,6 +20,7 @@ package org.apache.maven.cli.props;
 
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Properties;
 
@@ -27,7 +28,10 @@ import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class MavenPropertiesLoaderTest {
 
@@ -44,10 +48,43 @@ class MavenPropertiesLoaderTest {
         Path userDirectory = fs.getPath("/user");
         Files.createDirectories(userDirectory);
         Path propsPath = userDirectory.resolve("ma ven.properties");
-        Files.writeString(propsPath, "fro = ${bar}z\n" + "bar = chti${java.version}\n");
+        Files.writeString(propsPath, "${includes} = another.properties\nfro = ${bar}z\n");
+
+        Properties p = new Properties();
+        p.put("java.version", "11");
+        assertThrows(NoSuchFileException.class, () ->
+            MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false));
+
+        Path another = propsPath.resolveSibling("another.properties");
+        Files.writeString(another, "bar = chti${java.version}\n");
+        MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false);
+        assertEquals("chti11z", p.getProperty("fro"));
+    }
+
+    @Test
+    void testIncludes3() throws Exception {
+        FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
+
+        Path mavenHome = fs.getPath("/maven");
+        Files.createDirectories(mavenHome);
+        Path mavenConf = mavenHome.resolve("conf");
+        Files.createDirectories(mavenConf);
+        Path mavenUserProps = mavenConf.resolve("maven.properties");
+        Files.writeString(mavenUserProps, "${includes} = default.properties,?env-${env.envName}.properties\n");
+        Path propsPath = mavenConf.resolve("default.properties");
+        Files.writeString(propsPath, "foo=bar");
+        Path envPath = mavenConf.resolve("env-ci.properties");
+        Files.writeString(envPath, "foo=bar-env\nfoo-env=bar\n");
 
         Properties p = new Properties();
         MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false);
-        assertFalse(p.getProperty("fro").contains("$"));
+        assertEquals("bar", p.getProperty("foo"));
+        assertNull(p.getProperty("foo-env"));
+
+        p = new Properties();
+        p.put("env.envName", "ci");
+        MavenPropertiesLoader.loadProperties(p, mavenUserProps, null, false);
+        assertEquals("bar-env", p.getProperty("foo"));
+        assertEquals("bar", p.getProperty("foo-env"));
     }
 }

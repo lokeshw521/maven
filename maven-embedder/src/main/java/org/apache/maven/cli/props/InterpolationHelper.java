@@ -30,7 +30,6 @@ public class InterpolationHelper {
     private static final String DELIM_START = "${";
     private static final String DELIM_STOP = "}";
     private static final String MARKER = "$__";
-    private static final String ENV_PREFIX = "env:";
 
     /**
      * Perform substitution on a property set
@@ -39,7 +38,7 @@ public class InterpolationHelper {
      * @param callback Callback for substitution
      */
     public static void performSubstitution(Map<String, String> properties, Function<String, String> callback) {
-        performSubstitution(properties, callback, true, true, true);
+        performSubstitution(properties, callback, true, true);
     }
 
     /**
@@ -48,14 +47,12 @@ public class InterpolationHelper {
      * @param properties the property set to perform substitution on
      * @param callback the callback to obtain substitution values
      * @param substituteFromConfig If substitute from configuration
-     * @param substituteFromSystemProperties If substitute from system properties
      * @param defaultsToEmptyString sets an empty string if a replacement value is not found, leaves intact otherwise
      */
     public static void performSubstitution(
             Map<String, String> properties,
             Function<String, String> callback,
             boolean substituteFromConfig,
-            boolean substituteFromSystemProperties,
             boolean defaultsToEmptyString) {
         Map<String, String> org = new HashMap<>(properties);
         for (String name : properties.keySet()) {
@@ -68,7 +65,6 @@ public class InterpolationHelper {
                             org,
                             callback,
                             substituteFromConfig,
-                            substituteFromSystemProperties,
                             defaultsToEmptyString));
         }
     }
@@ -97,7 +93,7 @@ public class InterpolationHelper {
      **/
     public static String substVars(
             String val, String currentKey, Map<String, String> cycleMap, Map<String, String> configProps) {
-        return substVars(val, currentKey, cycleMap, configProps, (Function<String, String>) null);
+        return substVars(val, currentKey, cycleMap, configProps, null);
     }
 
     /**
@@ -129,7 +125,7 @@ public class InterpolationHelper {
             Map<String, String> cycleMap,
             Map<String, String> configProps,
             Function<String, String> callback) {
-        return substVars(val, currentKey, cycleMap, configProps, callback, true, true, false);
+        return substVars(val, currentKey, cycleMap, configProps, callback, true, false);
     }
 
     /**
@@ -152,7 +148,6 @@ public class InterpolationHelper {
      * @param configProps Set of configuration properties.
      * @param callback the callback to obtain substitution values
      * @param substituteFromConfig If substitute from configuration
-     * @param substituteFromSystemProperties If substitute from system properties
      * @param defaultsToEmptyString sets an empty string if a replacement value is not found, leaves intact otherwise
      * @return The value of the specified string after system property substitution.
      * @throws IllegalArgumentException If there was a syntax error in the
@@ -165,7 +160,6 @@ public class InterpolationHelper {
             Map<String, String> configProps,
             Function<String, String> callback,
             boolean substituteFromConfig,
-            boolean substituteFromSystemProperties,
             boolean defaultsToEmptyString) {
         return unescape(doSubstVars(
                 val,
@@ -174,7 +168,6 @@ public class InterpolationHelper {
                 configProps,
                 callback,
                 substituteFromConfig,
-                substituteFromSystemProperties,
                 defaultsToEmptyString));
     }
 
@@ -185,7 +178,6 @@ public class InterpolationHelper {
             Map<String, String> configProps,
             Function<String, String> callback,
             boolean substituteFromConfig,
-            boolean substituteFromSystemProperties,
             boolean defaultsToEmptyString) {
         if (cycleMap == null) {
             cycleMap = new HashMap<>();
@@ -262,9 +254,6 @@ public class InterpolationHelper {
                 if (callback != null) {
                     substValue = callback.apply(variable);
                 }
-                if (substValue == null && substituteFromSystemProperties) {
-                    substValue = System.getProperty(variable);
-                }
             }
         }
 
@@ -311,7 +300,6 @@ public class InterpolationHelper {
                 configProps,
                 callback,
                 substituteFromConfig,
-                substituteFromSystemProperties,
                 defaultsToEmptyString);
 
         cycleMap.remove(currentKey);
@@ -337,17 +325,4 @@ public class InterpolationHelper {
         return val;
     }
 
-    public static class DefaultSubstitutionCallback implements Function<String, String> {
-        public DefaultSubstitutionCallback() {}
-
-        public String apply(String key) {
-            String value = null;
-            if (key.startsWith(ENV_PREFIX)) {
-                value = System.getenv(key.substring(ENV_PREFIX.length()));
-            } else {
-                value = System.getProperty(key);
-            }
-            return value;
-        }
-    }
 }
