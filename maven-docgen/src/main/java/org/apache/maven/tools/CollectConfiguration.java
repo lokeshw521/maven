@@ -131,14 +131,6 @@ public class CollectConfiguration {
                                                 FieldSource<JavaClassSource> f =
                                                         ((JavaClassSource) jtype).getField(fieldName);
 
-                                                int fa = fieldAccess;
-                                                String fn = fieldName;
-                                                String fd = fieldDescriptor;
-                                                String fs = fieldSignature;
-                                                Object fv = fieldValue;
-                                                String ad = annotationDescriptor;
-                                                boolean av = annotationVisible;
-
                                                 String fqName = null;
                                                 String desc = cloneJavadoc(f.getJavaDoc())
                                                         .removeAllTags()
