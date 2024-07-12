@@ -18,8 +18,8 @@
  */
 package org.apache.maven.cli.props;
 
+import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.StringTokenizer;
@@ -36,16 +36,14 @@ public class MavenPropertiesLoader {
 
     public static void loadProperties(
             java.util.Properties properties, Path path, Function<String, String> callback, boolean escape)
-            throws Exception {
+            throws IOException {
         MavenProperties sp = new MavenProperties(false);
-        try {
+        if (Files.exists(path)) {
             sp.load(path);
-        } catch (NoSuchFileException ex) {
-            // ignore
         }
         properties.forEach(
                 (k, v) -> sp.put(k.toString(), escape ? InterpolationHelper.escape(v.toString()) : v.toString()));
-        loadIncludes(INCLUDES_PROPERTY, path, sp, callback);
+        loadIncludes(path, sp, callback);
         substitute(sp, callback);
         sp.forEach(properties::setProperty);
     }
@@ -68,22 +66,21 @@ public class MavenPropertiesLoader {
     }
 
     private static MavenProperties loadPropertiesFile(
-            Path path, boolean failIfNotFound, Function<String, String> callback) throws Exception {
+            Path path, boolean failIfNotFound, Function<String, String> callback) throws IOException {
         MavenProperties configProps = new MavenProperties(null, false);
         if (Files.exists(path) || failIfNotFound) {
             configProps.load(path);
-            loadIncludes(INCLUDES_PROPERTY, path, configProps, callback);
+            loadIncludes(path, configProps, callback);
             trimValues(configProps);
         }
         return configProps;
     }
 
-    private static void loadIncludes(
-            String propertyName, Path configProp, MavenProperties configProps, Function<String, String> callback)
-            throws Exception {
-        String includes = configProps.get(propertyName);
+    private static void loadIncludes(Path configProp, MavenProperties configProps, Function<String, String> callback)
+            throws IOException {
+        String includes = configProps.get(INCLUDES_PROPERTY);
         if (includes != null) {
-            includes = substVars(includes, propertyName, null, configProps, callback);
+            includes = substVars(includes, INCLUDES_PROPERTY, null, configProps, callback);
             StringTokenizer st = new StringTokenizer(includes, "?\",", true);
             if (st.countTokens() > 0) {
                 String location;
@@ -102,7 +99,7 @@ public class MavenPropertiesLoader {
                 } while (location != null);
             }
         }
-        configProps.remove(propertyName);
+        configProps.remove(MavenPropertiesLoader.INCLUDES_PROPERTY);
     }
 
     private static void trimValues(MavenProperties configProps) {
